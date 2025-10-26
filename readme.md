@@ -78,4 +78,6 @@ streamlit run app_streamlit.py
 
 ## Screenshot
 
-![Dashboard Screenshot](images/sample_screenshot.png)
+![Dashboard Screenshot](images/input_page.png)
+![Dashboard Screenshot](images/res.png)
+![Dashboard Screenshot](images/leaderboard.png)
