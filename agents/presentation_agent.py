@@ -1,28 +1,95 @@
-from agents.base_agent import create_agent
-from utils.github_utils import fetch_github_content
-from utils.github_utils import estimate_gemini_tokens
+"""Presentation Agent - Powered by PitchIQ
 
-def evaluate_presentation(repo_url):
-    repo_content = fetch_github_content(repo_url)
-    rubric = """Evaluate clarity of README, visuals, and ease of understanding for end-users.
-                Content to look for:
+Evaluates hackathon presentation videos using PitchIQ's AI-powered
+presentation evaluation platform.
+"""
 
-                README structure: Clear sections (Overview, Installation, Usage, Results).
-                
-                Visuals: Diagrams, screenshots, or charts explaining workflow.
-                
-                Code comments: Explanations of tricky logic or algorithms.
-                
-                Writing quality: Grammar, conciseness, clarity.
-                Scoring Guidelines:
-                | Score Range | Description                                                                                  |
-                | ----------- | -------------------------------------------------------------------------------------------- |
-                | 13–15       | Very clear, organized, concise presentation; visuals and explanations enhance understanding. |
-                | 9–12        | Mostly clear; minor lapses in organization or clarity.                                       |
-                | 5–8         | Somewhat unclear; difficult to follow in places.                                             |
-                | 0–4         | Poorly communicated; confusing or incomplete.                                                |
-                """
-    agent = create_agent("Presentation & Communication", 15, rubric)
-    estimate_gemini_tokens(repo_content)
-    output = agent.run({"repo_content": repo_content})
-    return output
+import sys
+import os
+import json
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Add PitchIQ to path
+PITCHIQ_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../PitchIQ'))
+if PITCHIQ_PATH not in sys.path:
+    sys.path.insert(0, PITCHIQ_PATH)
+
+from PitchIQ.tools.presentationEvaluator import evaluate_presentation_quick
+
+def evaluate_presentation(video_url):
+    """
+    Evaluate a hackathon presentation video using PitchIQ.
+    
+    Args:
+        video_url: YouTube URL of the presentation video
+        
+    Returns:
+        JSON string with category, score, and feedback
+    """
+    try:
+        # Use PitchIQ's presentation evaluator
+        result = evaluate_presentation_quick(video_url)
+        
+        if not result.get("success"):
+            return json.dumps({
+                "category": "Presentation & Communication",
+                "score": 0,
+                "feedback": f"Failed to evaluate video: {result.get('error', 'Unknown error')}"
+            })
+        
+        # Extract evaluation data
+        evaluation = result.get("evaluation", {})
+        structured_eval = evaluation.get("structured_evaluation", {})
+        
+        # Get total score (PitchIQ uses 0-15 scale, which matches!)
+        total_score = structured_eval.get("total_score", 0)
+        
+        # Build comprehensive feedback
+        feedback_parts = []
+        
+        # Add overall feedback
+        overall = structured_eval.get("overall_feedback", "")
+        if overall:
+            feedback_parts.append(f"Overall: {overall}")
+        
+        # Add criteria breakdown
+        criteria = structured_eval.get("criteria_scores", {})
+        if criteria:
+            feedback_parts.append("\nBreakdown:")
+            for key, data in criteria.items():
+                score = data.get("score", 0)
+                criterion_name = key.replace("_", " ").title()
+                feedback_parts.append(f"- {criterion_name}: {score}/3")
+        
+        # Add strengths
+        strengths = structured_eval.get("strengths", [])
+        if strengths:
+            feedback_parts.append("\nStrengths:")
+            for strength in strengths[:3]:  # Top 3
+                feedback_parts.append(f"✓ {strength}")
+        
+        # Add improvement areas
+        improvements = structured_eval.get("areas_for_improvement", [])
+        if improvements:
+            feedback_parts.append("\nAreas for Improvement:")
+            for improvement in improvements[:3]:  # Top 3
+                feedback_parts.append(f"→ {improvement}")
+        
+        # Format response
+        response = {
+            "category": "Presentation & Communication",
+            "score": int(total_score),
+            "feedback": " ".join(feedback_parts) if feedback_parts else "Evaluation completed."
+        }
+        
+        return json.dumps(response)
+        
+    except Exception as e:
+        return json.dumps({
+            "category": "Presentation & Communication",
+            "score": 0,
+            "feedback": f"Error during evaluation: {str(e)}"
+        })
