@@ -13,12 +13,16 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Google Cloud imports
-import vertexai
-from vertexai.generative_models import GenerativeModel, Part
+# Google AI imports
+import google.generativeai as genai
 
 # YouTube downloader
 import yt_dlp
+
+# Configure API key
+api_key = os.getenv('GOOGLE_API_KEY')
+if api_key:
+    genai.configure(api_key=api_key)
 
 
 def _download_video_internal(url, output_path="downloads"):
@@ -83,19 +87,24 @@ def _evaluate_with_gemini(video_path):
         tuple: (success: bool, evaluation_result: dict, error: str)
     """
     try:
-        project_id = os.getenv('GOOGLE_CLOUD_PROJECT')
-        location = os.getenv('GOOGLE_CLOUD_LOCATION', 'us-central1')
+        api_key = os.getenv('GOOGLE_API_KEY')
+        if not api_key:
+            return False, None, "GOOGLE_API_KEY environment variable not set"
         
-        if not project_id:
-            return False, None, "GOOGLE_CLOUD_PROJECT environment variable not set"
+        # Upload video file
+        video_file = genai.upload_file(path=video_path)
         
-        vertexai.init(project=project_id, location=location)
-        model = GenerativeModel("gemini-2.0-flash-exp")
+        # Wait for processing
+        import time
+        while video_file.state.name == "PROCESSING":
+            time.sleep(1)
+            video_file = genai.get_file(video_file.name)
         
-        with open(video_path, 'rb') as f:
-            video_data = f.read()
+        if video_file.state.name == "FAILED":
+            return False, None, "Video processing failed"
         
-        video_part = Part.from_data(data=video_data, mime_type="video/mp4")
+        # Use Gemini model
+        model = genai.GenerativeModel("gemini-2.0-flash")
         
         evaluation_prompt = """Evaluate this presentation video and provide a detailed assessment with scores.
 
@@ -165,8 +174,14 @@ EVALUATION FORMAT - Return ONLY valid JSON:
 
 Be objective and thorough. Provide specific examples from the video."""
         
-        response = model.generate_content([video_part, evaluation_prompt])
+        response = model.generate_content([video_file, evaluation_prompt])
         response_text = response.text
+        
+        # Clean up uploaded file
+        try:
+            genai.delete_file(video_file.name)
+        except:
+            pass
         
         evaluation_result = {
             "raw_evaluation": response_text,
