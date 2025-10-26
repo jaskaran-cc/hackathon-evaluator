@@ -74,3 +74,8 @@ streamlit run dashboard.py
 | Feasibility & Completeness         | 20     |
 | Impact & Scalability               | 15     |
 | Presentation & Communication       | 15     |
+
+
+## Screenshot
+
+![Dashboard Screenshot](images/sample_screenshot.png)
