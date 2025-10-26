@@ -10,16 +10,21 @@ from agents.technical_agent import evaluate_technical
 from agents.feasibility_agent import evaluate_feasibility
 from agents.impact_agent import evaluate_impact
 from agents.presentation_agent import evaluate_presentation
+from agents.video_analysis_agent import evaluate_video_presentation
 # top of your script (before any ChatGoogleGenerativeAI() calls)
 app = FastAPI(title="Hackathon Repo Evaluation API")
 
 # Input model
 class RepoRequest(BaseModel):
     repo_url: str
+    video_url: str | None = None  # Optional YouTube video URL for presentation analysis
 
 # Multi-agent orchestrator
-def orchestrate_evaluation(repo_url: str):
+def orchestrate_evaluation(repo_url: str, video_url: str | None = None):
     print(f">Starting multi-agent evaluation for: {repo_url}\n")
+    if video_url:
+        print(f" Video URL provided: {video_url}\n")
+    
     results = {}
     total_score = 0
 
@@ -30,6 +35,10 @@ def orchestrate_evaluation(repo_url: str):
         "Impact": evaluate_impact,
         "Presentation": evaluate_presentation,
     }
+    
+    # Add video analysis agent if video URL is provided
+    if video_url:
+        agents["Video Presentation"] = lambda url: evaluate_video_presentation(video_url)
 
     for name, func in agents.items():
         print(f"🤖 Evaluating {name}...")
@@ -52,7 +61,7 @@ def orchestrate_evaluation(repo_url: str):
 @app.post("/evaluate")
 def evaluate_repo(request: RepoRequest):
     try:
-        report = orchestrate_evaluation(request.repo_url)
+        report = orchestrate_evaluation(request.repo_url, request.video_url)
         return report
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
