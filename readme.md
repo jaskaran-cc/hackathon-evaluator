@@ -56,7 +56,7 @@ uvicorn app.main:app --reload
 ### 2. Run the Streamlit dashboard
 
 ```bash
-streamlit run dashboard.py
+streamlit run app_streamlit.py
 ```
 
 * Enter the GitHub repository URL in the input box.
